@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 럭셔리 주사위 게임</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti for Celebration Effects -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background: radial-gradient(circle at center, #1b2038 0%, #0d0f19 100%);
+            color: #f3f4f6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* GLASSMORPHISM CARD STYLE */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        /* 3D DICE STYLING & PERSPECTIVE */
+        .dice-scene {
+            perspective: 1200px;
+            width: 120px;
+            height: 120px;
+            margin: 15px auto;
+        }
+
+        .cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 1.5s cubic-bezier(0.15, 0.85, 0.35, 1.2);
+        }
+
+        /* CUBE FACES */
+        .cube-face {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            border-radius: 20px;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.15), 0 0 10px rgba(0,0,0,0.2);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            padding: 14px;
+            box-sizing: border-box;
+            border: 2px solid rgba(255,255,255,0.8);
+        }
+
+        /* Red Accent for Face 1, Dark Metallic for others */
+        .pip {
+            display: block;
+            background-color: #1e293b;
+            border-radius: 50%;
+            margin: auto;
+            width: 20px;
+            height: 20px;
+            box-shadow: inset 0 3px 5px rgba(0,0,0,0.4);
+        }
+
+        .cube-face[data-face="1"] .pip {
+            background-color: #ef4444; /* Signature Red Pip for 1 */
+            width: 26px;
+            height: 26px;
+        }
+
+        /* 3D POSITIONING FOR CUBE FACES */
+        .cube-face[data-face="1"] { transform: translateZ(60px); }
+        .cube-face[data-face="2"] { transform: rotateY(-90deg) translateZ(60px); }
+        .cube-face[data-face="3"] { transform: rotateX(-90deg) translateZ(60px); }
+        .cube-face[data-face="4"] { transform: rotateX(90deg) translateZ(60px); }
+        .cube-face[data-face="5"] { transform: rotateY(90deg) translateZ(60px); }
+        .cube-face[data-face="6"] { transform: rotateY(180deg) translateZ(60px); }
+
+        /* PIP POSITIONS GRID ALIGNMENT */
+        .cube-face .pip:nth-child(1) { grid-area: 1 / 1; }
+        .cube-face .pip:nth-child(2) { grid-area: 1 / 2; }
+        .cube-face .pip:nth-child(3) { grid-area: 1 / 3; }
+        .cube-face .pip:nth-child(4) { grid-area: 2 / 1; }
+        .cube-face .pip:nth-child(5) { grid-area: 2 / 2; }
+        .cube-face .pip:nth-child(6) { grid-area: 2 / 3; }
+        .cube-face .pip:nth-child(7) { grid-area: 3 / 1; }
+        .cube-face .pip:nth-child(8) { grid-area: 3 / 2; }
+        .cube-face .pip:nth-child(9) { grid-area: 3 / 3; }
+
+        /* GLOW & BUTTON EFFECTS */
+        .glow-btn {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            box-shadow: 0 8px 25px -5px rgba(99, 102, 241, 0.5);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glow-btn:hover:not(:disabled) {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 12px 30px -3px rgba(99, 102, 241, 0.7);
+        }
+
+        .glow-btn:active:not(:disabled) {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* CUSTOM SCROLLBAR FOR HISTORY */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen justify-between p-4 md:p-8">
+
+    <!-- MAIN CONTAINER -->
+    <div class="max-w-4xl mx-auto w-full space-y-6">
+        
+        <!-- HEADER TITLE -->
+        <header class="text-center space-y-2">
+            <div class="inline-flex items-center space-x-3 bg-indigo-500/10 border border-indigo-500/20 px-4 py-1.5 rounded-full text-indigo-400 text-xs font-semibold tracking-wider uppercase">
+                <i class="fa-solid font-bold fa-dice"></i> Premium Web Game
+            </div>
+            <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-white to-purple-300">
+                3D LUCK & DICE
+            </h1>
+            <p class="text-slate-400 text-sm md:text-base">주사위를 굴려 승리를 거두고 당신의 행운을 시험해보세요!</p>
+        </header>
+
+        <!-- GAME MODE SELECTOR -->
+        <div class="glass-panel p-2 rounded-2xl flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+            <button id="mode-single" onclick="switchMode('single')" class="flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 bg-indigo-600 text-white shadow-lg">
+                <i class="fa-solid fa-cube mr-1.5"></i> 싱글 모드
+            </button>
+            <button id="mode-dual" onclick="switchMode('dual')" class="flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-cubes mr-1.5"></i> 듀얼 모드
+            </button>
+            <button id="mode-vs" onclick="switchMode('vs')" class="flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 text-slate-400 hover:text-white hover:bg-white/5">
+                <i class="fa-solid fa-robot mr-1.5"></i> VS AI 모드
+            </button>
+        </div>
+
+        <!-- DASHBOARD BOARD & STATS -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass-panel p-4 rounded-2xl text-center">
+                <span class="text-xs text-slate-400 font-medium block mb-1">현재 점수</span>
+                <span id="stat-current" class="text-2xl md:text-3xl font-bold text-indigo-400">0</span>
+            </div>
+            <div class="glass-panel p-4 rounded-2xl text-center">
+                <span class="text-xs text-slate-400 font-medium block mb-1">최고 점수</span>
+                <span id="stat-high" class="text-2xl md:text-3xl font-bold text-amber-400">0</span>
+            </div>
+            <div class="glass-panel p-4 rounded-2xl text-center">
+                <span class="text-xs text-slate-400 font-medium block mb-1">연속 승리 (Streak)</span>
+                <span id="stat-streak" class="text-2xl md:text-3xl font-bold text-emerald-400">0</span>
+            </div>
+            <div class="glass-panel p-4 rounded-2xl text-center">
+                <span class="text-xs text-slate-400 font-medium block mb-1">총 굴린 횟수</span>
+                <span id="stat-rolls" class="text-2xl md:text-3xl font-bold text-purple-400">0</span>
+            </div>
+        </div>
+
+        <!-- MAIN PLAY ARENA -->
+        <div class="glass-panel rounded-3xl p-6 md:p-10 text-center relative overflow-hidden">
+            
+            <!-- VS STATUS INDICATOR (HIDDEN BY DEFAULT) -->
+            <div id="vs-indicator" class="hidden mb-6 flex justify-around items-center bg-black/20 p-3 rounded-2xl border border-white/5">
+                <div id="player-score-box" class="text-center p-2 rounded-xl transition-all border border-indigo-500/50 bg-indigo-500/10">
+                    <span class="text-xs text-indigo-300 block font-semibold">플레이어</span>
+                    <span id="player-vs-score" class="text-2xl font-black text-white">0</span>
+                </div>
+                <div class="text-xl font-extrabold text-slate-500 italic">VS</div>
+                <div id="ai-score-box" class="text-center p-2 rounded-xl transition-all border border-transparent">
+                    <span class="text-xs text-purple-300 block font-semibold">AI 컴퓨터</span>
+                    <span id="ai-vs-score" class="text-2xl font-black text-white">0</span>
+                </div>
+            </div>
+
+            <!-- STATUS & MESSAGE ANNOUNCER -->
+            <div id="status-message" class="text-lg md:text-xl font-medium text-slate-300 mb-4 h-8 flex items-center justify-center gap-2">
+                주사위를 굴릴 준비가 되었습니다!
+            </div>
+
+            <!-- 3D DICE ARENA -->
+            <div id="dice-container" class="flex justify-center items-center gap-6 my-8 min-h-[160px]">
+                <!-- Dice 1 -->
+                <div class="dice-scene">
+                    <div id="dice1" class="cube">
+                        <!-- Face 1 -->
+                        <div class="cube-face" data-face="1"><span class="pip"></span></div>
+                        <!-- Face 2 -->
+                        <div class="cube-face" data-face="2"><span class="pip"></span><span class="pip"></span></div>
+                        <!-- Face 3 -->
+                        <div class="cube-face" data-face="3"><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                        <!-- Face 4 -->
+                        <div class="cube-face" data-face="4"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                        <!-- Face 5 -->
+                        <div class="cube-face" data-face="5"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                        <!-- Face 6 -->
+                        <div class="cube-face" data-face="6"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                    </div>
+                </div>
+
+                <!-- Dice 2 (Dynamically shown/hidden) -->
+                <div id="dice2-scene" class="dice-scene hidden">
+                    <div id="dice2" class="cube">
+                        <div class="cube-face" data-face="1"><span class="pip"></span></div>
+                        <div class="cube-face" data-face="2"><span class="pip"></span><span class="pip"></span></div>
+                        <div class="cube-face" data-face="3"><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                        <div class="cube-face" data-face="4"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                        <div class="cube-face" data-face="5"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                        <div class="cube-face" data-face="6"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTROLS -->
+            <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mt-6">
+                <button id="roll-btn" onclick="handleRoll()" class="glow-btn w-full sm:w-auto px-10 py-4 rounded-2xl font-bold text-lg text-white flex items-center justify-center gap-3">
+                    <i class="fa-solid fa-play"></i> 주사위 굴리기
+                </button>
+                <button onclick="toggleSound()" id="sound-btn" class="glass-panel hover:bg-white/10 px-5 py-4 rounded-2xl font-semibold text-slate-300 transition-all flex items-center justify-center gap-2 w-full sm:w-auto">
+                    <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- HISTORY & LOGS PANEL -->
+        <div class="glass-panel rounded-3xl p-6 space-y-4">
+            <div class="flex justify-between items-center border-b border-white/5 pb-3">
+                <h2 class="text-base font-semibold text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> 최근 게임 기록
+                </h2>
+                <button onclick="clearHistory()" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                    기록 삭제
+                </button>
+            </div>
+            <div id="history-list" class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                <div class="text-center py-6 text-slate-500 text-sm">아직 게임 기록이 없습니다. 주사위를 굴려보세요!</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="text-center text-xs text-slate-600 mt-8">
+        © 2026 3D Dice Master Application. Built with HTML, CSS 3D & Web Audio.
+    </footer>
+
+    <script>
+        /* GAME STATE MANAGEMENT */
+        let gameMode = 'single'; // 'single', 'dual', 'vs'
+        let soundEnabled = true;
+        let isRolling = false;
+        
+        // Stats
+        let stats = {
+            currentScore: 0,
+            highScore: localStorage.getItem('dice_highScore') || 0,
+            streak: 0,
+            totalRolls: parseInt(localStorage.getItem('dice_totalRolls')) || 0
+        };
+
+        // VS Mode Variables
+        let vsState = {
+            turn: 'player', // 'player' or 'ai'
+            playerScore: 0,
+            aiScore: 0
+        };
+
+        // Rotation map to show correct face on top front
+        // Face rotations: [x, y]
+        const faceRotations = {
+            1: [0, 0],
+            2: [0, 90],
+            3: [90, 0],
+            4: [-90, 0],
+            5: [0, -90],
+            6: [0, 180]
+        };
+
+        // Initial setup on window load
+        window.onload = () => {
+            updateStatsUI();
+            
+            // Generate Web Audio Context on user interaction
+            document.addEventListener('click', initAudioContext, { once: true });
+        };
+
+        /* WEB AUDIO API SOUND SYNTHESIZER */
+        let audioCtx = null;
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            if (!audioCtx) initAudioContext();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'roll') {
+                // Rolling rattle noise / wooden bounce sound
+                for (let i = 0; i < 5; i++) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(120 + Math.random() * 100, now + i * 0.08);
+                    osc.frequency.exponentialRampToValueAtTime(40, now + i * 0.08 + 0.05);
+
+                    gain.gain.setValueAtTime(0.15, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.05);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start(now + i * 0.08);
+                    osc.stop(now + i * 0.08 + 0.06);
+                }
+            } else if (type === 'win') {
+                // Victory Chime
+                const notes = [261.63, 329.63, 392.00, 523.25]; // C, E, G, C
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.3);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start(now + idx * 0.1);
+                    osc.stop(now + idx * 0.1 + 0.3);
+                });
+            } else if (type === 'lose') {
+                // Low lose tone
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(80, now + 0.4);
+
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const soundBtn = document.getElementById('sound-icon');
+            if (soundEnabled) {
+                soundBtn.className = 'fa-solid fa-volume-high';
+            } else {
+                soundBtn.className = 'fa-solid fa-volume-xmark text-slate-500';
+            }
+        }
+
+        /* MODE SWITCHING LOGIC */
+        function switchMode(mode) {
+            if (isRolling) return;
+
+            gameMode = mode;
+            
+            // Button Styles Update
+            ['single', 'dual', 'vs'].forEach(m => {
+                const btn = document.getElementById(`mode-${m}`);
+                if (m === mode) {
+                    btn.className = 'flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 bg-indigo-600 text-white shadow-lg';
+                } else {
+                    btn.className = 'flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 text-slate-400 hover:text-white hover:bg-white/5';
+                }
+            });
+
+            const dice2Scene = document.getElementById('dice2-scene');
+            const vsIndicator = document.getElementById('vs-indicator');
+            const statusMsg = document.getElementById('status-message');
+
+            if (mode === 'single') {
+                dice2Scene.classList.add('hidden');
+                vsIndicator.classList.add('hidden');
+                statusMsg.textContent = '단일 주사위 모드 준비 완료!';
+            } else if (mode === 'dual') {
+                dice2Scene.classList.remove('hidden');
+                vsIndicator.classList.add('hidden');
+                statusMsg.textContent = '2개의 주사위 모드 준비 완료!';
+            } else if (mode === 'vs') {
+                dice2Scene.classList.add('hidden');
+                vsIndicator.classList.remove('hidden');
+                resetVSState();
+                statusMsg.textContent = 'VS AI 대결! 당신의 차례입니다.';
+            }
+
+            resetDicePosition();
+        }
+
+        function resetVSState() {
+            vsState.turn = 'player';
+            vsState.playerScore = 0;
+            vsState.aiScore = 0;
+            document.getElementById('player-vs-score').textContent = '0';
+            document.getElementById('ai-vs-score').textContent = '0';
+            
+            document.getElementById('player-score-box').className = 'text-center p-2 rounded-xl transition-all border border-indigo-500/50 bg-indigo-500/10';
+            document.getElementById('ai-score-box').className = 'text-center p-2 rounded-xl transition-all border border-transparent';
+        }
+
+        function resetDicePosition() {
+            const d1 = document.getElementById('dice1');
+            const d2 = document.getElementById('dice2');
+            d1.style.transform = 'rotateX(0deg) rotateY(0deg)';
+            d2.style.transform = 'rotateX(0deg) rotateY(0deg)';
+        }
+
+        /* MAIN ROLL ACTION */
+        function handleRoll() {
+            if (isRolling) return;
+
+            isRolling = true;
+            document.getElementById('roll-btn').disabled = true;
+            playSound('roll');
+
+            const val1 = Math.floor(Math.random() * 6) + 1;
+            const val2 = Math.floor(Math.random() * 6) + 1;
+
+            // Animate Dice
+            rollCube('dice1', val1);
+            if (gameMode === 'dual') {
+                rollCube('dice2', val2);
+            }
+
+            // Process score after CSS transition ends (1.5s)
+            setTimeout(() => {
+                processResult(val1, val2);
+                isRolling = false;
+                document.getElementById('roll-btn').disabled = false;
+            }, 1500);
+        }
+
+        function rollCube(cubeId, targetValue) {
+            const cube = document.getElementById(cubeId);
+            const targetRot = faceRotations[targetValue];
+
+            // Add extra full 360 rotations for realistic spinning effect
+            const extraX = (Math.floor(Math.random() * 3) + 3) * 360;
+            const extraY = (Math.floor(Math.random() * 3) + 3) * 360;
+
+            const finalX = extraX + targetRot[0];
+            const finalY = extraY + targetRot[1];
+
+            cube.style.transform = `rotateX(${finalX}deg) rotateY(${finalY}deg)`;
+        }
+
+        /* RESULT EVALUATION */
+        function processResult(val1, val2) {
+            stats.totalRolls++;
+            localStorage.setItem('dice_totalRolls', stats.totalRolls);
+
+            let rolledScore = val1;
+            let detailText = `주사위 눈: [ ${val1} ]`;
+
+            if (gameMode === 'dual') {
+                rolledScore = val1 + val2;
+                detailText = `주사위 눈: [ ${val1} ], [ ${val2} ] (합계: ${rolledScore})`;
+            }
+
+            stats.currentScore = rolledScore;
+
+            // Mode specific rules
+            if (gameMode === 'single' || gameMode === 'dual') {
+                if (rolledScore > stats.highScore) {
+                    stats.highScore = rolledScore;
+                    localStorage.setItem('dice_highScore', stats.highScore);
+                    triggerConfetti();
+                    playSound('win');
+                    document.getElementById('status-message').textContent = `🎉 축하합니다! 최고 기록 달성: ${rolledScore}점!`;
+                } else if (rolledScore >= (gameMode === 'single' ? 5 : 10)) {
+                    stats.streak++;
+                    playSound('win');
+                    document.getElementById('status-message').textContent = `🔥 대박 점수! ${rolledScore}점을 얻었습니다!`;
+                } else {
+                    stats.streak = 0;
+                    document.getElementById('status-message').textContent = `결과: ${rolledScore}점`;
+                }
+                addHistory(gameMode.toUpperCase(), detailText, rolledScore);
+            } else if (gameMode === 'vs') {
+                handleVSRound(val1);
+            }
+
+            updateStatsUI();
+        }
+
+        /* VS AI TURN LOGIC */
+        function handleVSRound(val) {
+            const statusMsg = document.getElementById('status-message');
+
+            if (vsState.turn === 'player') {
+                vsState.playerScore = val;
+                document.getElementById('player-vs-score').textContent = val;
+                statusMsg.textContent = `플레이어: ${val}점! 이제 AI의 차례입니다...`;
+
+                // Shift turn highlight
+                vsState.turn = 'ai';
+                document.getElementById('player-score-box').className = 'text-center p-2 rounded-xl transition-all border border-transparent';
+                document.getElementById('ai-score-box').className = 'text-center p-2 rounded-xl transition-all border border-purple-500/50 bg-purple-500/10';
+
+                // Automatically trigger AI roll after delay
+                setTimeout(() => {
+                    handleRoll();
+                }, 1200);
+
+            } else { // AI Turn
+                vsState.aiScore = val;
+                document.getElementById('ai-vs-score').textContent = val;
+
+                // Determine Winner
+                if (vsState.playerScore > vsState.aiScore) {
+                    statusMsg.textContent = `🏆 승리! (나: ${vsState.playerScore} vs AI: ${vsState.aiScore})`;
+                    stats.streak++;
+                    playSound('win');
+                    triggerConfetti();
+                    addHistory('VS AI', `승리 (나: ${vsState.playerScore} / AI: ${vsState.aiScore})`, 'WIN');
+                } else if (vsState.playerScore < vsState.aiScore) {
+                    statusMsg.textContent = `😭 패배! (나: ${vsState.playerScore} vs AI: ${vsState.aiScore})`;
+                    stats.streak = 0;
+                    playSound('lose');
+                    addHistory('VS AI', `패배 (나: ${vsState.playerScore} / AI: ${vsState.aiScore})`, 'LOSE');
+                } else {
+                    statusMsg.textContent = `무승부! (나: ${vsState.playerScore} vs AI: ${vsState.aiScore})`;
+                    addHistory('VS AI', `무승부 (${vsState.playerScore} 대 ${vsState.aiScore})`, 'DRAW');
+                }
+
+                // Reset Turn back to Player
+                vsState.turn = 'player';
+                document.getElementById('player-score-box').className = 'text-center p-2 rounded-xl transition-all border border-indigo-500/50 bg-indigo-500/10';
+                document.getElementById('ai-score-box').className = 'text-center p-2 rounded-xl transition-all border border-transparent';
+            }
+        }
+
+        function updateStatsUI() {
+            document.getElementById('stat-current').textContent = stats.currentScore;
+            document.getElementById('stat-high').textContent = stats.highScore;
+            document.getElementById('stat-streak').textContent = stats.streak;
+            document.getElementById('stat-rolls').textContent = stats.totalRolls;
+        }
+
+        function triggerConfetti() {
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 80,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            }
+        }
+
+        function addHistory(modeName, detail, resultTag) {
+            const historyList = document.getElementById('history-list');
+            
+            // Remove empty placeholder
+            if (historyList.children.length === 1 && historyList.children[0].classList.contains('text-center')) {
+                historyList.innerHTML = '';
+            }
+
+            const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const item = document.createElement('div');
+            item.className = 'flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5 text-sm hover:bg-white/10 transition-colors';
+            
+            item.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="text-xs px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">${modeName}</span>
+                    <span class="text-slate-300">${detail}</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="font-bold ${resultTag === 'WIN' ? 'text-emerald-400' : resultTag === 'LOSE' ? 'text-rose-400' : 'text-indigo-400'}">${resultTag}</span>
+                    <span class="text-xs text-slate-500">${timeStr}</span>
+                </div>
+            `;
+
+            historyList.prepend(item);
+        }
+
+        function clearHistory() {
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = `<div class="text-center py-6 text-slate-500 text-sm">아직 게임 기록이 없습니다. 주사위를 굴려보세요!</div>`;
+        }
+    </script>
+</body>
+</html>
